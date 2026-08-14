@@ -26,9 +26,11 @@ Export the current DeepSeek Harness conversation as **Markdown**, **PDF** (print
 Requires Node.js ≥ 22 and pnpm (`npm install -g pnpm`) — `dsh plugin add` installs the bundle into the profile with pnpm.
 
 ```sh
-dsh plugin --profile web add https://github.com/beijingwahw/dsh-conv-export/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/beijingwahw/dsh-conv-export/archive/refs/tags/v0.1.0.tar.gz
 dsh web   # restart the server to pick the plugin up
 ```
+
+Tag URLs are immutable, so the tarball checksum never changes. (Branch URLs like `refs/heads/main` move with every push and trip pnpm's `ERR_PNPM_TARBALL_INTEGRITY` once a lockfile has recorded an older checksum.)
 
 ## Usage
 

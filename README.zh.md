@@ -26,9 +26,11 @@
 需要 Node.js ≥ 22 与 pnpm（`npm install -g pnpm`）——`dsh plugin add` 通过 pnpm 把 bundle 装入 profile。
 
 ```sh
-dsh plugin --profile web add https://github.com/beijingwahw/dsh-conv-export/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/beijingwahw/dsh-conv-export/archive/refs/tags/v0.1.0.tar.gz
 dsh web   # 重启服务以加载插件
 ```
+
+tag 地址不可变，tarball 校验和永不变化。（`refs/heads/main` 这类分支地址随每次推送变动，lockfile 记录过旧校验和后会触发 pnpm 的 `ERR_PNPM_TARBALL_INTEGRITY`。）
 
 ## 使用
 
