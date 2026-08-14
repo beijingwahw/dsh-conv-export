@@ -135,15 +135,14 @@ class ExportController {
     if (messages.length === 0) return
     const title = readTitle() ?? 'Conversation'
     const stem = safeFileStem(title)
-    const exportedAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
     this.busy = true
     try {
       if (kind === 'markdown') {
-        downloadBlob(`${stem}.md`, 'text/markdown;charset=utf-8', buildMarkdown(title, messages, exportedAt))
+        downloadBlob(`${stem}.md`, 'text/markdown;charset=utf-8', buildMarkdown(title, messages))
       } else if (kind === 'pdf') {
-        exportPdf(title, messages, exportedAt)
+        await exportPdf(title, messages)
       } else {
-        await exportImage(title, messages, exportedAt)
+        await exportImage(title, messages)
       }
     } catch {
       // Long-image raster failures degrade to a visible toast.

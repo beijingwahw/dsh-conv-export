@@ -46,13 +46,12 @@ describe('htmlToMarkdown', () => {
 })
 
 describe('buildMarkdown', () => {
-  it('assembles title, meta, and role sections in order', () => {
+  it('assembles title and role sections in order', () => {
     const md = buildMarkdown('会话标题', [
       { role: 'user', text: '问题', html: '' },
       { role: 'assistant', text: '', html: '<h2>答</h2>' },
-    ], '2026-08-14 08:00:00')
+    ])
     expect(md.startsWith('# 会话标题')).toBe(true)
-    expect(md).toContain('2026-08-14 08:00:00')
     const userIdx = md.indexOf('### ')
     expect(md).toContain('### User') // en dict in jsdom (navigator.language en-US)
     expect(userIdx).toBeGreaterThan(-1)

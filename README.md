@@ -15,9 +15,9 @@ Export the current DeepSeek Harness conversation as **Markdown**, **PDF** (print
 - **Header export button** (download glyph) registered into the `conversation.session.header.actions` slot — additive, safely uninstalled, and mirrors its open state via `aria-pressed`.
 - **Dropdown menu** with three sinks:
   - **Markdown (.md)** — client-side download; assistant turns are serialized back from rendered HTML (headings, lists, fenced code with language, tables, blockquotes, links, inline emphasis).
-  - **PDF (print)** — opens a clean print window (typeset stylesheet, print-friendly margins); the browser's "Save as PDF" does the rest.
+  - **PDF (download)** — the conversation is rasterized, sliced into A4-proportioned pages, and downloaded as a self-contained multi-page PDF. No print window, no dialog: the app tab never freezes.
   - **Long image (PNG)** — offscreen render measured and rasterized through SVG `foreignObject` at 2x, images inlined as data URLs, downloaded as one tall PNG (height capped at 16000px).
-- **Sensible file names** from the session title (sanitized, capped); export timestamp line in every artifact.
+- **Sensible file names** from the session title (sanitized, capped).
 - Follows the harness `--dsw-alias-*` design tokens; menu labels switch zh/en by document language.
 - Menu hygiene: Escape or outside-click closes; a toast reports long-image raster failures.
 
@@ -32,7 +32,7 @@ dsh web   # restart the server to pick the plugin up
 
 ## Usage
 
-Open any conversation, click the download icon in the session header, pick a format. The Markdown/PNG download starts immediately; PDF opens the print dialog in a new window.
+Open any conversation, click the download icon in the session header, pick a format. All three formats download directly — no dialogs, the app tab stays responsive.
 
 ## How it works
 
@@ -42,8 +42,8 @@ Open any conversation, click the download icon in the session header, pick a for
 
 ## Known limitations
 
-- Long image rasterization requires the browser to paint SVG `foreignObject` (all evergreen browsers do); exotic embedded content may flatten.
-- PDF is produced via the browser print dialog ("Save as PDF") — no server-side PDF engine is bundled.
+- The long-image and PDF paths rasterize through SVG `foreignObject` (all evergreen browsers paint it); exotic embedded content may flatten.
+- PDF pages are raster images (text is not selectable); for selectable text use the Markdown export.
 - Export scope is the active conversation column only — sidebar titles and settings pages are out of scope.
 
 ## Troubleshooting

@@ -169,13 +169,11 @@ export function htmlToMarkdown(html: string): string {
  * Assemble the full export document.
  * @param title - the session title (null → generic heading).
  * @param messages - the extracted turns, in order.
- * @param exportedAt - ISO timestamp of the export.
  * @returns the markdown document text.
  */
-export function buildMarkdown(title: string | null, messages: readonly ExtractedMessage[], exportedAt: string): string {
+export function buildMarkdown(title: string | null, messages: readonly ExtractedMessage[]): string {
   const parts: string[] = []
   parts.push(`# ${title ?? 'Conversation'}`)
-  parts.push(`> ${t('meta.exported')} ${exportedAt}`)
   for (const msg of messages) {
     parts.push(`### ${msg.role === 'user' ? t('role.user') : t('role.assistant')}`)
     parts.push(msg.role === 'user' ? msg.text : htmlToMarkdown(msg.html))
