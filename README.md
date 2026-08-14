@@ -49,6 +49,14 @@ Open any conversation, click the download icon in the session header, pick a for
 ## Troubleshooting
 
 - `'pnpm' is not recognized` during `dsh plugin add` → install pnpm first: `npm install -g pnpm`.
+- `ETIMEDOUT` fetching the GitHub tarball → pnpm does not inherit the system proxy, and hardcoding a proxy port is unreliable (every proxy tool binds its own, usually already occupied). Read the address your proxy actually registered instead — PowerShell:
+
+  ```powershell
+  $p = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings').ProxyServer
+  $env:HTTP_PROXY = "http://$p"; $env:HTTPS_PROXY = "http://$p"
+  ```
+
+  then re-run the add command. Prefer a fixed port? Pick an obscure one such as **49151** — the last registered port before the dynamic range, so no common service, no ephemeral allocation, and no proxy tool default ever lands on it: set it as your proxy tool's local HTTP port, then `$env:HTTP_PROXY="http://127.0.0.1:49151"`. Port-free fallback: download the tarball in your browser and install locally: `dsh plugin --profile web add .\Downloads\main.tar.gz`.
 - `EADDRINUSE ... :3080` on `dsh web` → a previous `dsh web` is still bound to the port. Stop it (Ctrl+C in its terminal; on Windows: `Get-NetTCPConnection -LocalPort 3080 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`), or start on another port with `dsh web --port 3081`.
 
 ## License

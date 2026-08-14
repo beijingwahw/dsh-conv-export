@@ -49,6 +49,14 @@ dsh web   # 重启服务以加载插件
 ## 排障
 
 - `dsh plugin add` 时报 `'pnpm' 不是内部或外部命令` → 先安装 pnpm：`npm install -g pnpm`。
+- 拉取 GitHub tarball 报 `ETIMEDOUT` → pnpm 不会继承系统代理，而写死代理端口也不可靠（各家代理工具端口不同且常被占用）。改为读取你的代理实际登记的地址——PowerShell：
+
+  ```powershell
+  $p = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings').ProxyServer
+  $env:HTTP_PROXY = "http://$p"; $env:HTTPS_PROXY = "http://$p"
+  ```
+
+  然后重跑 add 命令。想固定端口的话，选个冷门的如 **49151**——动态端口区间（49152–65535）之前的最后一个注册端口，常见服务、系统随机分配、各家代理工具默认都不会落到它上面：把它设为代理工具的本地 HTTP 端口，再 `$env:HTTP_PROXY="http://127.0.0.1:49151"`。免端口兜底：浏览器下载 tarball 后本地安装：`dsh plugin --profile web add .\Downloads\main.tar.gz`。
 - `dsh web` 报 `EADDRINUSE ... :3080` → 上一个 `dsh web` 仍占用端口。在其终端按 Ctrl+C 停掉；Windows 可用 `Get-NetTCPConnection -LocalPort 3080 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`，或换端口启动：`dsh web --port 3081`。
 
 ## 许可证
