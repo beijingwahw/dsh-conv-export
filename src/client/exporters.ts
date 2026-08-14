@@ -78,6 +78,11 @@ export function buildExportHtml(title: string, messages: readonly ExtractedMessa
 /**
  * Export as PDF: open a print window with the export document and invoke
  * its print dialog (user picks "Save as PDF").
+ *
+ * The print call lives in a script inside the NEW window, so it runs on the
+ * new tab's own main thread: `print()` is synchronous and blocks its caller,
+ * and calling it from the opener (as `win.print()`) would freeze the app tab
+ * until the dialog closes. Self-invocation keeps the app tab responsive.
  * @param title - the session title.
  * @param messages - the extracted turns.
  * @param exportedAt - ISO timestamp line.
@@ -87,11 +92,10 @@ export function exportPdf(title: string, messages: readonly ExtractedMessage[], 
   if (win === null) return
   win.document.write(`<!doctype html><html><head><meta charset="utf-8">`
     + `<title>${title.replace(/</g, '&lt;')}</title><style>${EXPORT_CSS}</style></head>`
-    + `<body>${buildExportHtml(title, messages, exportedAt)}</body></html>`)
+    + `<body>${buildExportHtml(title, messages, exportedAt)}`
+    + '<script>window.addEventListener("load", function () { setTimeout(function () { window.print() }, 60) })</script>'
+    + '</body></html>')
   win.document.close()
-  win.focus()
-  win.addEventListener('load', () => { win.print() })
-  if (win.document.readyState === 'complete') win.print()
 }
 
 /**
