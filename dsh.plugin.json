@@ -1,0 +1,13 @@
+{
+  "id": "@dsh-external/dsh-conv-export",
+  "version": "0.1.0",
+  "main": "lib/index.js",
+  "description": "dsh-conv-export（对话导出）— export the current conversation as Markdown, PDF (print), or a long PNG image. Zero core changes.",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  }
+}

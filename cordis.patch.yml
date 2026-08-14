@@ -1,0 +1,7 @@
+# dsh-conv-export bundle patch: mounts the plugin into a profile layer stack.
+# The host half is an empty registration shell (all behavior is browser-side),
+# but the row must exist so the boot graph scans the package's `dsh.client`
+# declaration and serves `lib/client.js` at /plugins/<id>/client.js.
+- insert:
+    - id: conv-export
+      name: '@dsh-external/dsh-conv-export'
