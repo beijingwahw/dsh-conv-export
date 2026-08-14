@@ -1,12 +1,23 @@
 {
   "id": "@dsh-external/dsh-conv-export",
+  "displayName": "对话导出 / Conversation Export",
   "version": "0.1.0",
+  "publisher": "beijingwahw",
   "main": "lib/index.js",
   "description": "dsh-conv-export（对话导出）— export the current conversation as Markdown, PDF (print), or a long PNG image. Zero core changes.",
+  "keywords": ["export", "markdown", "pdf", "png", "conversation", "archive"],
+  "category": "Productivity",
   "engines": {
     "dsh": ">=0.0.1"
   },
   "contributes": {
+    "ui": [
+      {
+        "slot": "conversation.session.header.actions",
+        "id": "dsh-conv-export-action",
+        "description": "Export button in the session header (Markdown / PDF / long image)."
+      }
+    ],
     "tools": [],
     "skills": []
   }

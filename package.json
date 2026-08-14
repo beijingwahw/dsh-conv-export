@@ -9,6 +9,7 @@
     "./invariant": "./lib/invariant.js",
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./dsh.plugin.json": "./dsh.plugin.json",
     "./package.json": "./package.json"
   },
   "dsh": {
