@@ -1,5 +1,9 @@
 # dsh-conv-export（对话导出）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![dsh-plugin](https://img.shields.io/badge/dsh-plugin-blue)](https://github.com/topics/dsh-plugin)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek-Harness-orange)](https://github.com/deepseek-ai/deepseek-harness)
+
 English | [中文](README.zh.md)
 
 Export the current DeepSeek Harness conversation as **Markdown**, **PDF** (print dialog), or a **long PNG image** — one click in the session header, zero core changes.
