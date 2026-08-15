@@ -34,7 +34,8 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "preinstall": "node -e \"const a=process.env.npm_config_user_agent||'';if(!/pnpm/.test(a)){console.error('[preinstall] 本项目约定使用 pnpm 安装依赖，请先执行 npm i -g pnpm；已拦截 npm/yarn。');process.exit(1)}\""
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -49,5 +50,6 @@
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "pnpm@10.34.5"
 }
