@@ -25,6 +25,8 @@
 
 需要 Node.js ≥ 22 与 pnpm（`npm install -g pnpm`）——`dsh plugin add` 通过 pnpm 把 bundle 装入 profile。
 
+将本仓库放入 DeepSeek Harness 的插件目录（或通过包管理器安装），Harness 会依据 dsh.plugin.json 与 cordis.patch.yml 自动加载。
+
 ```sh
 dsh plugin --profile web add https://github.com/beijingwahw/dsh-conv-export/archive/refs/tags/v0.1.0.tar.gz
 dsh web   # 重启服务以加载插件
