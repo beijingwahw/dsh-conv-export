@@ -3,9 +3,11 @@
   "compilerOptions": {
     "noEmit": false,
     "declaration": true,
-    "emitDeclarationOnly": false,
+    "emitDeclarationOnly": true,
     "outDir": "lib",
-    "types": ["node"]
+    "rootDir": "src",
+    "types": ["node"],
+    "skipLibCheck": true
   },
-  "include": ["src", "tests"]
+  "include": ["src"]
 }

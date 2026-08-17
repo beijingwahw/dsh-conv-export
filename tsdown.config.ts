@@ -25,7 +25,7 @@ export default [
     platform: 'node',
     target: 'es2024',
     fixedExtension: false,
-    dts: false,
+    dts: true,
     clean: true,
   },
   {
@@ -33,7 +33,7 @@ export default [
     outDir: 'lib',
     format: 'cjs',
     platform: 'browser',
-    dts: false,
+    dts: true,
     clean: false,
     external: [...CLIENT_EXTERNALS],
     define: {

@@ -1,10 +1,83 @@
 {
   "id": "@dsh-external/dsh-conv-export",
+  "name": "dsh-conv-export",
   "version": "0.1.0",
-  "main": "lib/index.js",
   "description": "dsh-conv-export（对话导出）— export the current conversation as Markdown, PDF (print), or a long PNG image. Zero core changes.",
+  "author": "beijingwahw",
+  "license": "MIT",
+  "homepage": "https://github.com/beijingwahw/dsh-conv-export",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/beijingwahw/dsh-conv-export.git"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "conv-export",
+    "export",
+    "markdown",
+    "pdf",
+    "png",
+    "long-image"
+  ],
   "engines": {
+    "node": "^22.19.0 || >=24.0.0",
     "dsh": ">=0.0.1"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "entry": {
+    "host": "lib/index.js",
+    "client": "lib/client.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/client.d.ts",
+      "default": "./lib/client.js"
+    }
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts",
+    "src",
+    "cordis.patch.yml",
+    "dsh.plugin.json",
+    "LICENSE",
+    "README.md",
+    "README.zh.md"
+  ],
+  "bundle": {
+    "patch": "./cordis.patch.yml"
+  },
+  "client": {
+    "platform": "web",
+    "inject": [
+      "@deepseek-ai/dsh-client-runtime"
+    ]
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-storage-domain": ">=0.0.1-0",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-storage-domain": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
   },
   "contributes": {
     "tools": [],
