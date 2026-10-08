@@ -52,6 +52,54 @@ export declare function readTitle(): string | null;
  */
 export declare function extractMessages(scope?: HTMLElement | null): ExtractedMessage[];
 /**
+ * Build one user turn from its row node (bubble text, falling back to the
+ * whole row when the bubble class is absent).
+ * @param node - the `_userRow` element.
+ * @returns the turn, or null when the row renders no text (empty shell).
+ */
+export declare function fromUserRow(node: HTMLElement): ExtractedMessage | null;
+/**
+ * Build one assistant turn from its markdown container (skip empty shells —
+ * still-streaming placeholders render no text yet).
+ * @param node - the `_markdown_` element.
+ * @returns the turn, or null when the container renders no text.
+ */
+export declare function fromMarkdownNode(node: HTMLElement): ExtractedMessage | null;
+/** Class shared by every per-turn export button (strip entry + CSS hooks). */
+export declare const TURN_BUTTON_CLASS = "dsh-conv-export-turn";
+/** Per-turn extraction result (the assistant-actions strip's export entry). */
+export interface TurnExtract {
+    /** The turn's segment (user question when adjacent + the reply), document order. */
+    readonly messages: readonly ExtractedMessage[];
+    /** 1-based ordinal among every assistant markdown container in the pane; 0 = unknown. */
+    readonly index: number;
+}
+/**
+ * Extract the single turn that owns `anchor` — the per-turn export button
+ * rendered into `conversation.chat.assistant-actions`.
+ *
+ * The strip does NOT reliably sit inside the reply's own wrapper, so ancestry
+ * is only a hint; resolution therefore layers three independent probes:
+ *
+ * 1. **messageId seat** — the slot hands us the assistant message id; the
+ *    pane keys its chat-node seats by message key, so a seat containing that
+ *    id pins the body exactly.
+ * 2. **button ordinal** — the plugin renders one button per finalized reply,
+ *    so with `buttons.length === bodies.length` the Nth button maps to the
+ *    Nth body. Correct even when every strip shares one container (the layout
+ *    that made ancestry return the first reply for every button).
+ * 3. **document order** — the body immediately preceding the strip (strips
+ *    render under their reply); falls forward when a strip renders above it.
+ *
+ * The user question directly preceding the chosen body joins the segment, so
+ * "this turn" exports ask + answer.
+ *
+ * @param anchor - the per-turn export button.
+ * @param messageId - slot-provided assistant message id (may be undefined).
+ * @returns the turn payload, or null when no rendered body is reachable.
+ */
+export declare function extractTurn(anchor: Element, messageId?: string): TurnExtract | null;
+/**
  * Sanitize a string into a safe download-file stem: path/hostile characters
  * and runs of whitespace collapse to '-', capped at 60 chars.
  * @param raw - the proposed file name stem (e.g. the session title).

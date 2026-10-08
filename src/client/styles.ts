@@ -1,8 +1,8 @@
 /**
  * Global stylesheet adoption: the export dropdown chrome, the header action
- * button, the turn-selection panel, the batch session panel, and the failure
- * toast. Injected once into document.head with a stable id so repeated
- * plugin loads never double-inject.
+ * button, the per-turn strip button, the turn-selection panel, and the
+ * failure toast. Injected once into document.head with a stable id so
+ * repeated plugin loads never double-inject.
  *
  * 视觉系统「墨与玻璃（Ink & Glass）」：
  * - 结构分层：发丝线分隔各区块，面板 20px 大圆角 + 三层冷调投影 + 内侧
@@ -76,6 +76,44 @@ const STYLE_TEXT = `
 .dsh-conv-export-action[aria-pressed="true"] {
   background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, .16));
   color: var(--dsw-alias-label-primary, currentColor);
+}
+
+/* ---- per-turn export entry (assistant-actions strip) ----
+   挂载时会把同排按钮的 class 抄过来（adoptStripLook），因此颜色、尺寸、
+   hover 与皮肤样式天然一致；下面 :where() 的兜底基础式特异性为 0，
+   只在没抄到 class（同排尚无其它按钮）时生效，绝不与主题抢优先级。 */
+:where(.dsh-conv-export-turn) {
+  appearance: none;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  margin: 0;
+  padding: 6px;
+  width: 28px;
+  flex: none;
+  line-height: 0;
+  vertical-align: middle;
+  transition: background .13s ease, color .13s ease;
+}
+:where(.dsh-conv-export-turn:hover) {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, .12));
+}
+:where(.dsh-conv-export-turn:active) {
+  transform: scale(.94);
+}
+.dsh-conv-export-turn[aria-pressed="true"] {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, .16));
+}
+.dsh-conv-export-turn:focus-visible,
+.dsh-conv-export-action:focus-visible {
+  outline: 2px solid var(--cx-focus, rgba(59, 130, 246, .5));
+  outline-offset: 1px;
 }
 
 /* ============================================================
@@ -182,6 +220,12 @@ const STYLE_TEXT = `
   border: 0;
   border-top: 1px solid var(--cx-line-soft);
   margin: 5px 8px;
+}
+/* 单轮模式（每轮按钮打开，data-mode="turn"）：单轮无从勾选，
+   隐藏「选择回合导出…」及其分隔线。 */
+[data-dsh-conv-export-menu][data-mode="turn"] button[data-export-kind="select"],
+[data-dsh-conv-export-menu][data-mode="turn"] hr {
+  display: none;
 }
 
 /* ============================================================
@@ -426,9 +470,7 @@ const STYLE_TEXT = `
 }
 /* 未勾选行：角色与正文整体降透明度（被排除的视觉信号）。 */
 [data-dsh-conv-export-panel-item]:not(:has(input:checked)) [data-dsh-conv-export-panel-item-role],
-[data-dsh-conv-export-panel-item]:not(:has(input:checked)) [data-dsh-conv-export-panel-item-text],
-[data-dsh-conv-export-panel-item]:not(:has(input:checked)) [data-dsh-conv-export-batch-name],
-[data-dsh-conv-export-panel-item]:not(:has(input:checked)) [data-dsh-conv-export-batch-time] {
+[data-dsh-conv-export-panel-item]:not(:has(input:checked)) [data-dsh-conv-export-panel-item-text] {
   opacity: .45;
 }
 /* 角色徽章：前导圆点 + 分色文字（半透明底在明暗主题下均可读）。 */
@@ -667,57 +709,6 @@ const STYLE_TEXT = `
 [data-dsh-conv-export-menu] button:focus-visible {
   outline: 2px solid var(--cx-focus);
   outline-offset: 1px;
-}
-
-/* ============================================================
-   batch session panel — 搜索框 + 会话行
-   ============================================================ */
-[data-dsh-conv-export-batch-search] {
-  background-color: rgba(127, 127, 127, .05);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2398a2b3' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='4.2'/%3E%3Cpath d='M10.2 10.2L13.5 13.5'/%3E%3C/svg%3E");
-  background-position: 11px center;
-  background-repeat: no-repeat;
-  background-size: 15px;
-  border: 1px solid var(--cx-line);
-  border-radius: var(--cx-radius-md);
-  color: var(--cx-label-1);
-  font: inherit;
-  font-size: 13px;
-  margin: 12px 20px 0;
-  padding: 8px 12px 8px 33px;
-  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
-}
-[data-dsh-conv-export-batch-search]::placeholder {
-  color: var(--cx-label-3);
-}
-[data-dsh-conv-export-batch-search]:focus {
-  background-color: var(--cx-bg);
-  border-color: rgba(59, 130, 246, .55);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, .14);
-  outline: none;
-}
-/* 会话行：标题（单行截断）+ 创建时间（右侧固定，等宽数字）。 */
-[data-dsh-conv-export-batch-name] {
-  color: var(--cx-label-2);
-  flex: 1;
-  font-size: 13px;
-  line-height: 1.55;
-  min-width: 0;
-  overflow: hidden;
-  padding-top: 2px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-[data-dsh-conv-export-panel-item]:has(input:checked) [data-dsh-conv-export-batch-name] {
-  color: var(--cx-label-1);
-}
-[data-dsh-conv-export-batch-time] {
-  color: var(--cx-label-3);
-  flex: none;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  padding-top: 4px;
-  white-space: nowrap;
 }
 
 /* ============================================================
