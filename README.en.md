@@ -6,58 +6,60 @@
 
 English | [中文](README.md)
 
-Export the current DeepSeek Harness conversation as **Markdown**, a **self-contained single-file HTML**, a **PDF** (downloaded directly — no print dialog), or a **long PNG image**, **copy the Markdown** to the clipboard in one click, and **batch-export** multiple historical sessions as a Markdown ZIP — one click in the session header, zero core changes.
+> **What this fork changes (v0.2.0)**: ① **Batch export removed** — upstream's host half mounted an *unauthenticated* `/conv-export` prefix route via `ctx.webServer`, so any local process could pull every session's full text with no token (`/api/*` answers 401); its list endpoint re-folded titles from logs on every call (18s+ measured), and the log-derived Markdown also carried `<system-reminder>` / AGENTS.md out. This fork deletes the host half entirely — `manifest.json` no longer requests the `webServer` / `sessionQuery` permissions. ② **Per-turn export added** — every finalized assistant reply's action strip (the `conversation.chat.assistant-actions` slot) gets a download button that opens the same menu scoped to that turn.
+
+Export the current DeepSeek Harness conversation — or **a single turn** of it — as **Markdown**, a **self-contained single-file HTML**, a **PDF** (downloaded directly — no print dialog), or a **long PNG image**, and **copy the Markdown** to the clipboard in one click, from the session header or the bubble's own strip: one click, zero core changes, browser-only.
 
 ## Problems it solves
 
 - **Conversations evaporate**: long sessions hold decisions, code, and error trails, but the harness has no built-in way to take them out. This plugin turns the rendered transcript into portable artifacts.
 - **One format never fits**: sharing with a teammate wants Markdown; archiving for compliance wants PDF; pasting into chat wants an image. All three ship in one menu.
-- **One artifact often isn't enough either**: handoffs and archives frequently need several historical sessions in one go. Batch export renders each as its own Markdown file and packs them into a single ZIP.
-- **The ZIP itself is an archive**: every batch-export ZIP ships with an `index.html` offline viewer and a machine-readable `manifest.json` — unzip, double-click, and browse all sessions with instant full-text search, per-session copy / download, no server and no network required. The viewer is also a **smart archive**: the sidebar lays sessions out on a date-grouped timeline, each entry carries a first-question preview (know the topic without opening it), and a stats bar sums up session count / total turns / time span; the manifest mirrors per-session `preview` fields and a global `stats` block, so scripts and external tooling can consume the archive profile directly.
-- **Exports must match what you see**: extraction runs at click time over the rendered DOM (including paged-in history), so the artifact is exactly the transcript on screen — code fences, tables, and emphasis preserved.
+- **The whole transcript is often not the part you want**: just one answer — the strip button under that bubble exports exactly that turn, with `-turnN` appended to the file name.
+- **Exports must match what you see**: extraction runs at click time over the rendered DOM (including paged-in history), so the artifact is exactly the transcript on screen — code fences, tables, and emphasis preserved; thinking blocks, tool cards, and injected instruction layers are not part of the rendered body, so they never enter the artifact.
 
 ## Features
 
 - **Header export button** (download glyph) registered into the `conversation.session.header.actions` slot — additive, safely uninstalled, and mirrors its open state via `aria-pressed`.
-- **Dropdown menu** with five sinks plus turn selection:
+- **Per-turn export button** (download glyph) registered into `conversation.chat.assistant-actions` — it lands in every finalized assistant reply's copy/like strip; clicking it reuses the same menu but scopes extraction to that turn. Resolution degrades through three probes: ① the slot's `messageId` → matching `[data-chat-anchor-key]` seat; ② button-ordinal mapping — one button per reply, so equal counts map the Nth button to the Nth body (this defeats layouts where strips don't interleave with bodies and "nearest preceding" collapses to the first reply); ③ document order — the body immediately preceding the strip. A user question directly before the chosen body joins the segment; the button adopts its neighbours' classes at mount so colour/metrics/hover match the strip and any skin. The menu hides "Select turns…" in per-turn mode and the file name gains a `-turnN` ordinal.
+- **Dropdown menu** with six entries (the fifth is hidden in per-turn mode):
   - **Markdown (.md)** — client-side download; assistant turns are serialized back from rendered HTML (headings, lists, fenced code with language, tables, blockquotes, links, inline emphasis).
   - **HTML (.html)** — a self-contained single file: styles inlined, images converted to data URLs, opens with a double-click and shares as-is; text stays selectable and searchable, and the embedded print stylesheet makes "print → save as PDF" the selectable-text alternative to the raster PDF.
   - **PDF (download)** — tiled rasterization sliced into A4-proportioned pages (page boundaries align with tile boundaries, page count unbounded, peak memory bounded to one tile), downloaded as a self-contained multi-page PDF. No print window, no dialog: the app tab never freezes.
   - **Long image (PNG)** — tiled rasterization (`foreignObject` windows via `translateY`, tile height = A4 page height × 2) plus a streaming PNG encoder (tile-level adaptive row filtering → incremental `CompressionStream('deflate')` compression), images inlined as data URLs. The PNG spec has no height cap; the sane ceiling is ~176 A4 pages (200,000 CSS px). Environments without `CompressionStream` fall back to the legacy single-canvas truncation path (16000px).
   - **Copy Markdown** — writes the Markdown straight to the clipboard, skipping the download-open-copy round trip; degrades to a visible hint when the clipboard is unavailable (insecure context).
   - **Select turns…** — opens a turn-selection panel: check turns individually (role + content preview, all checked by default), select all/none with a live count, pick the export format (Markdown / HTML / PDF / long image), and confirm to export only the checked turns (e.g. drop failed attempts or off-topic tangents). During export the confirm button shows tile progress; clicking it again or Cancel aborts.
-  - **Batch export sessions…** — opens a session-selection panel: real-time filtering by title / session ID, per-session checkboxes, select all/none (applies to the current filter result and unions with the existing selection), and a live selected count. Confirm and each selected session is rendered as its own Markdown, packed into a single ZIP download (up to 100 sessions per run, auto-deduplicated; unreadable sessions are skipped without blocking the rest). While packing, the confirm button shows "Packing…" and clicking it again or Cancel aborts; Escape / backdrop clicks don't close the panel mid-pack.
-- **Sensible file names** from the session title (sanitized, capped).
-- Follows the harness `--dsw-alias-*` design tokens; menu labels switch zh/en by document language.
+- **Sensible file names** from the session title (sanitized, capped); per-turn exports append `-turnN`.
+- Follows the harness `--dsw-alias-*` design tokens; menu labels resolve against the **live** `<html lang>` — the first read is no longer cached forever (early builds froze on the product-default `en` before the locale plugin wrote `zh-CN`, leaving the UI English), so language switches apply immediately; a still-untouched `en` with a Chinese browser falls back to Chinese.
 - Menu hygiene: Escape or outside-click closes; rasterizing menu items show live `done/total` progress and re-clicking the same item cancels the in-flight export; a toast reports long-image raster failures. The selection panel closes via Escape or backdrop click when idle, and via the Cancel button mid-export.
 
 ## Install
 
 Requires Node.js ≥ 22 and pnpm (`npm install -g pnpm`) — `dsh plugin add` installs the bundle into the profile with pnpm.
 
-### One-liner
+### One-liner (this fork)
 
 ```sh
-dsh plugin add beijingwahw/dsh-conv-export --profile web
+dsh plugin add ZIye1208/dsh-conv-export --profile web
 dsh web   # restart the server to pick the plugin up
 ```
 
-> Common follow-ups: upgrade `dsh plugin upgrade dsh-conv-export --profile web`; uninstall `dsh plugin remove dsh-conv-export --profile web`; local-path install `dsh plugin add ./dsh-conv-export --profile web`.
+> Common follow-ups: upgrade `dsh plugin upgrade dsh-conv-export --profile web`; uninstall `dsh plugin remove dsh-conv-export --profile web`; local-path install `dsh plugin add ./dsh-conv-export --profile web`. The desktop profile is owned by the Electron app — install through the desktop plugin flow instead.
 
-The package declares `dsh.bundle.patch` (mounts the host registration row) and `dsh.client` (serves the browser half at `/plugins/<id>/client.js`). `lib/` is committed, so the GitHub tarball installs without a build step.
+The package declares `dsh.bundle.patch` (mounts the plugin registration row the boot graph scans for `dsh.client`) and `dsh.client` (serves the browser half at `/plugins/<id>/client.js`). `lib/` is committed, so the GitHub tarball installs without a build step.
 
 ## Usage
 
-Open any conversation, click the download icon in the session header, pick a format. All four download formats download directly — no dialogs, the app tab stays responsive; "Copy Markdown" writes straight to the clipboard.
+- **Whole conversation**: open any conversation, click the download icon in the session header, pick a format. All four download formats download directly — no dialogs, the app tab stays responsive; "Copy Markdown" writes straight to the clipboard.
+- **One turn**: click the download icon in that reply's action strip — same menu (with "Select turns…" hidden), file name gains `-turnN`.
+- **A hand-picked set of turns**: header menu → "Select turns…", check them, pick a format.
 
-**Batch export**: pick "Batch export sessions…" from the menu, filter and check the target sessions in the panel, confirm, and a ZIP downloads (one `.md` per session, each with a metadata header — session ID / creation time / turn count — and timestamps). The ZIP also bundles:
-- `index.html` — a self-contained offline viewer (double-click to open, works over `file://`): the sidebar is a date-grouped timeline with sticky day headers, each session entry carries a first-question preview (clamped to two lines), and a stats bar sums up session count / total turns / time span; instant full-text search across titles, previews, and bodies (press `/` to focus, hit highlighting, no-match hint), rendered view with role badges / raw Markdown toggle, one-click copy and per-session `.md` download, with automatic light/dark theming;
-- `manifest.json` — a machine-readable index (version 2): `id → file` mapping, turn counts, per-session `preview` fields and a global `stats` block (sessions / total turns / time span), and the export time, for scripts and external tooling.
+Everything exports as conversation body only: thinking blocks, tool call/result cards, and the injected `<system-reminder>` layer are not part of the rendered body, so they never appear in the artifact (only the removed log-derived batch path carried them out).
 
 ## How it works
 
-- Single-session paths (Markdown / PDF / long image / turn selection) live entirely in the browser bundle (`lib/client.js`), mounted by the stock loader with zero core changes. Batch export needs cross-session reads — the browser cannot reach transcripts beyond the current conversation — so the host half (`lib/index.js`) gains a **read-only service layer**: it mounts the `/conv-export` prefix routes (`GET /sessions`, `POST /batch`) via `ctx.webServer` and reads sessions via `ctx.sessionQuery`, packing them into a Markdown ZIP (zero-dependency packer, STORE method). No storage domain, no outbound network requests, no state; the batch selection panel (filter / checkboxes / select-all / count / cancel) stays plain DOM and shares the turn panel's skeleton and design tokens.
-- Extraction walks `[data-conversation-scroll]` in document order, pairing user rows (`[class*="_userRow"]` bubbles) with assistant markdown containers (`[class*="_markdown_"]`) — the stock renderer's stable class contracts.
+- Every path (Markdown / HTML / PDF / long image / turn selection / per-turn export) lives in the browser bundle (`lib/client.js`), mounted by the stock loader with zero core changes and no host services. The host entry `src/index.ts` is an empty shell — this fork dropped upstream's `/conv-export` service layer (`webServer` + `sessionQuery`), and `manifest.json` no longer requests either permission.
+- Whole-transcript extraction walks `[data-conversation-scroll]` in document order, pairing user rows (`[class*="_userRow"]` bubbles) with assistant markdown containers (`[class*="_markdown_"]`) — the stock renderer's stable class contracts.
+- Per-turn extraction (`extractTurn`) degrades through three probes: ① the `messageId` seat — the pane keys chat-node seats by message key, so the slot's id pins the body exactly; ② button-ordinal mapping when button and body counts match; ③ document order — the outermost body immediately preceding the strip (its successor when the strip renders above the body). The user question adjacent to the chosen body joins the segment; the turn ordinal is that body's position among the pane's outermost markdown containers, feeding the `-turnN` file name.
 - The long-image/PDF paths use tiled rasterization: an offscreen stage stays mounted as the clone source, and each tile serializes a clean clone (explicit XHTML namespace, no offscreen offsets, `translateY(−offset)` window displacement) into an SVG `foreignObject`, validates it with `DOMParser`, then rasterizes onto an independent 2x canvas (tile height = A4 page height × 2). External images are fetched and inlined first; unreachable ones are dropped rather than tainting the canvas. PNG rows stream through a tile-level adaptive filter into `CompressionStream('deflate')` incremental compression — exactly the zlib stream the PNG spec requires.
 
 ## Known limitations
@@ -65,7 +67,8 @@ Open any conversation, click the download icon in the session header, pick a for
 - The long-image and PDF paths rasterize through SVG `foreignObject` (all evergreen browsers paint it); exotic embedded content may flatten.
 - PDF pages are raster images (text is not selectable); for selectable text use the Markdown or HTML export (the latter also prints to a selectable-text PDF from the browser).
 - Export scope is the active conversation column only — sidebar titles and settings pages are out of scope.
-- Batch export is Markdown-only (PDF / long images require per-session client-side rasterization and can't join a ZIP); batch entries are derived from session logs (raw text + metadata header), not reverse-serialized from rendered HTML, so rich-text formatting follows the log source.
+- Per-turn export depends on the `conversation.chat.assistant-actions` slot and the turn's chat-node seat: if DSH renames either, it degrades to the body nearest the button, and in the worst case may pick an adjacent turn — use "Select turns…" to check the exact ones then.
+- No batch export in this fork: for cross-session archiving use the official `/export` (session header → Session log, exports the raw session log ZIP).
 
 ## Troubleshooting
 

@@ -14,29 +14,39 @@
  * 键盘/外点关闭纪律与设计令牌；导出进行中确认按钮显示分片进度，
  * 再次点击或「取消」中止。
  *
- * 批量导出（batch export，能力吸收自 dsh-companion）：菜单第五项打开
- * 会话选择面板——拉取历史会话列表（宿主 GET /conv-export/sessions）、
- * 按标题/ID 实时筛选、逐个勾选、全选/全不选（作用于当前筛选结果并与
- * 已有选择取并集）、已选计数；确认后 POST /conv-export/batch 将所选
- * 会话各生成一份 Markdown 打包为 ZIP 下载。打包进行中确认按钮显示
- * 「正在打包…」，再次点击或「取消」中止；与回合面板共用遮罩/对话框
- * 骨架与关闭纪律（打包期间 Esc / 遮罩不关闭，以中止按钮为唯一出口）。
+ * 单轮导出（per-turn export）：助手气泡的动作条（DSH 插槽
+ * `conversation.chat.assistant-actions`）里有一个下载按钮，点击复用同一
+ * 菜单，但提取范围限定为该轮——`extractTurn()` 从按钮向上定位本轮的
+ * chat-node 座位（`[data-chat-anchor-key]`），取不到时退化为离按钮最近
+ * 的正文容器。此时菜单隐藏「选择回合导出…」（单轮无从勾选），文件名追加
+ * 「-回合N」序号（英文界面为「-turnN」，文案走 i18n）。
+ *
+ * 批量导出已整体移除（本 fork 的裁剪）：宿主半与 `/conv-export` 端点、
+ * `webServer`/`sessionQuery` 权限一并删除——它曾以无鉴权的前缀路由暴露
+ * 全部会话内容。
  *
  * Lifecycle: `install()` from the cordis apply (menu mount + outside-click
  * close), `uninstall()` on plugin unload.
  */
-import { extractMessages, readTitle, resolveScope, safeFileStem } from './extract.ts'
-import type { ExtractedMessage } from './extract.ts'
+import {
+  extractMessages,
+  extractTurn,
+  readTitle,
+  resolveScope,
+  safeFileStem,
+  TURN_BUTTON_CLASS,
+} from './extract.ts'
+import type { ExtractedMessage, TurnExtract } from './extract.ts'
 import { buildMarkdown } from './markdown.ts'
+import { placeMenu } from './place.ts'
 import { copyText, downloadBlob, exportHtml, exportImage, exportPdf } from './exporters.ts'
-import { fetchBatchSessions, runBatchExport, type BatchSession } from './batch.ts'
 import { t } from './i18n.ts'
 
 /** Export sink ids. */
 type ExportKind = 'markdown' | 'html' | 'pdf' | 'image' | 'copy'
 
-/** Menu entry ids — 'select' opens the turn panel, 'batch' the session panel. */
-type MenuKind = ExportKind | 'select' | 'batch'
+/** Menu entry ids — 'select' opens the turn panel. */
+type MenuKind = ExportKind | 'select'
 
 /**
  * 线性图标集（16px viewBox，stroke currentColor 随文字色）。静态常量字符串
@@ -55,8 +65,6 @@ const ICONS = {
     '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.75" y="3.25" width="10.5" height="9.5" rx="1.9"/><circle cx="6.1" cy="6.7" r="1.05"/><path d="M4.7 12l2.8-2.9 1.9 2 1.3-1.3 2.4 2.3"/></svg>',
   select:
     '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 4.7l1.4 1.4 2.6-2.9"/><path d="M8.7 4.6h4.5"/><path d="M2.8 10.7l1.4 1.4 2.6-2.9"/><path d="M8.7 10.6h4.5"/></svg>',
-  batch:
-    '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.6l5.3 2.7L8 8 2.7 5.3 8 2.6z"/><path d="M3 8.5l5 2.6 5-2.6"/><path d="M3 11.3l5 2.6 5-2.6"/></svg>',
   close:
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8"/></svg>',
   chevron:
@@ -121,14 +129,14 @@ function note(text: string, kind: NoteKind): HTMLDivElement {
  */
 class ExportController {
   private menu: HTMLElement | null = null
-  /** 选择面板（backdrop 元素；回合面板与批量面板共用此槽位）；null = 未打开。 */
+  /** 选择面板（backdrop 元素）；null = 未打开。 */
   private panel: HTMLElement | null = null
   private installed = false
   private running: RunningExport | null = null
-  /** 批量面板：会话列表拉取的取消控制器（面板关闭时中止）。 */
-  private batchListAbort: AbortController | null = null
-  /** 批量面板：打包请求的取消控制器（非 null 期间面板不可关闭）。 */
-  private batchRun: AbortController | null = null
+  /** 打开当前菜单的触发按钮（头部按钮或每轮按钮）：aria-pressed 镜像目标。 */
+  private trigger: HTMLElement | null = null
+  /** 单轮模式：非 null 期间菜单只导出这一轮（文件名追加「-回合N」）。 */
+  private turn: TurnExtract | null = null
 
   /** Install the menu DOM and document listeners. Idempotent. */
   install(): void {
@@ -151,11 +159,14 @@ class ExportController {
   }
 
   /**
-   * Toggle the dropdown (the header action button's gesture), anchoring it
-   * under the triggering button. 选择面板打开时不弹菜单。
-   * @param anchor - the header action button (positions the menu).
+   * Toggle the dropdown (header button **or** per-turn strip button),
+   * anchoring it under the triggering element. 选择面板打开时不弹菜单。
+   * 打开时按触发器判定模式：每轮按钮 → 单轮提取（messageId 用于精确定位）；
+   * 头部按钮 → 全会话。
+   * @param anchor - the button that owns the menu (positions it).
+   * @param messageId - slot-provided assistant message id (per-turn only).
    */
-  toggle(anchor?: Element): void {
+  toggle(anchor?: Element, messageId?: string): void {
     if (this.menu === null) return
     if (this.panel !== null) return
     if (resolveScope() === null) return
@@ -163,12 +174,30 @@ class ExportController {
     // menu only ever holds booleans, so "not false" is the hidden state.
     const open = this.menu.hidden !== false
     this.menu.hidden = !open
-    if (open && anchor instanceof HTMLElement) {
-      const rect = anchor.getBoundingClientRect()
-      const width = this.menu.offsetWidth
-      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
-      this.menu.style.top = `${Math.round(rect.bottom + 6)}px`
-      this.menu.style.left = `${Math.round(left)}px`
+    // [local-patch role-menu] role 只在菜单展开期间存在：展开=真弹层（可合理拦截快捷键），
+    // 收起即摘除，避免 DSH 快捷键调度器把页面判成「弹层常开」。
+    if (open) {
+      this.menu.setAttribute('role', 'menu')
+    } else {
+      this.menu.removeAttribute('role')
+    }
+    if (open) {
+      this.trigger = anchor instanceof HTMLElement ? anchor : null
+      this.turn = anchor instanceof HTMLElement && anchor.classList.contains(TURN_BUTTON_CLASS)
+        ? extractTurn(anchor, messageId)
+        : null
+      this.menu.setAttribute('data-mode', this.turn !== null ? 'turn' : 'session')
+      if (this.trigger !== null) {
+        const rect = this.trigger.getBoundingClientRect()
+        const placement = placeMenu(
+          { top: rect.top, bottom: rect.bottom, right: rect.right },
+          { width: this.menu.offsetWidth, height: this.menu.offsetHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        )
+        this.menu.style.top = `${placement.top}px`
+        this.menu.style.left = `${placement.left}px`
+        this.menu.setAttribute('data-cx-dir', placement.dir)
+      }
     }
     this.syncActionButton(open)
   }
@@ -177,7 +206,9 @@ class ExportController {
   close(): void {
     if (this.menu === null || this.menu.hidden) return
     this.menu.hidden = true
+    this.menu.removeAttribute('role') // [local-patch role-menu]
     this.syncActionButton(false)
+    this.turn = null
   }
 
   // ------------------------------------------------------------------ menu
@@ -187,7 +218,9 @@ class ExportController {
     const menu = document.createElement('div')
     menu.setAttribute('data-dsh-conv-export-menu', '')
     menu.hidden = true
-    menu.setAttribute('role', 'menu')
+    // [local-patch role-menu] 此处不再常驻 role="menu"，改为随开合同步（见 toggle/close）。
+    // 常驻的 role="menu"（即使 hidden）会被 DSH 快捷键调度器的 modalSelector 命中，
+    // 使 context.modal 恒为 "other"，从而拦截所有已配置的全局快捷键。
 
     /** 菜单项视觉规格：图标 + 文案 + 右侧标注（格式标签或子面板箭头）。 */
     const entries: Array<{
@@ -203,10 +236,9 @@ class ExportController {
       { kind: 'image', label: t('menu.image'), icon: ICONS.image, tag: 'PNG' },
       { kind: 'copy', label: t('menu.copy'), icon: ICONS.copy },
       { kind: 'select', label: t('menu.select'), icon: ICONS.select, chevron: true },
-      { kind: 'batch', label: t('menu.batch'), icon: ICONS.batch, chevron: true },
     ]
     for (const entry of entries) {
-      // 分隔线：区分「快捷导出」与「选择 / 批量导出」。
+      // 分隔线：区分「快捷导出」与「选择回合导出」。
       if (entry.kind === 'select') {
         const divider = document.createElement('hr')
         menu.appendChild(divider)
@@ -239,10 +271,6 @@ class ExportController {
           this.openSelection()
           return
         }
-        if (entry.kind === 'batch') {
-          this.openBatch()
-          return
-        }
         void this.run(entry.kind)
       })
       menu.appendChild(btn)
@@ -251,25 +279,27 @@ class ExportController {
     this.menu = menu
   }
 
-  /** Mirror the open state onto the header action button. */
+  /** Mirror the open state onto the button that opened the menu. */
   private syncActionButton(open: boolean): void {
-    const btn = document.querySelector('.dsh-conv-export-action')
+    const btn = this.trigger ?? document.querySelector('.dsh-conv-export-action')
     if (btn === null) return
     btn.setAttribute('aria-pressed', String(open))
   }
 
-  /** Close on any pointer-down outside the menu and its action button. */
+  /** Close on any pointer-down outside the menu and its trigger button. */
   private readonly onOutside = (e: PointerEvent): void => {
     const target = e.target
     if (!(target instanceof Node)) return
-    // 选择/批量面板打开：点击遮罩关闭（导出/打包进行中不允许，须经取消按钮）。
+    // 选择面板打开：点击遮罩关闭（导出进行中不允许，须经取消按钮）。
     if (this.panel !== null) {
-      if (this.panel === target && this.running === null && this.batchRun === null) this.closePanel()
+      if (this.panel === target && this.running === null) this.closePanel()
       return
     }
     if (this.menu === null || this.menu.hidden) return
     if (this.menu.contains(target)) return
-    if (target instanceof Element && target.closest('.dsh-conv-export-action') !== null) return
+    if (target instanceof Element && target.closest(
+      `.dsh-conv-export-action, .${TURN_BUTTON_CLASS}`,
+    ) !== null) return
     this.close()
   }
 
@@ -277,7 +307,7 @@ class ExportController {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape') return
     if (this.panel !== null) {
-      if (this.running === null && this.batchRun === null) this.closePanel()
+      if (this.running === null) this.closePanel()
       return
     }
     this.close()
@@ -304,14 +334,16 @@ class ExportController {
       if (this.running.kind === kind) this.running.abort.abort()
       return
     }
-    const messages = extractMessages()
+    // 打开时已按触发器分流：turn 非 null = 单轮模式，只导出这一轮。
+    const turn = this.turn
+    const messages = turn !== null ? [...turn.messages] : extractMessages()
     if (messages.length === 0) return
     const button = this.menu?.querySelector(`[data-export-kind="${kind}"]`) ?? null
     try {
       await this.execute(kind, messages, {
         el: button instanceof HTMLElement ? button : null,
         baseLabel: this.menuLabel(kind),
-      })
+      }, turn !== null && turn.index > 0 ? `-${t('turn.suffix')}${turn.index}` : undefined)
     } finally {
       this.close()
     }
@@ -323,14 +355,16 @@ class ExportController {
    * @param kind - 导出汇。
    * @param messages - 导出的回合列表（面板路径为筛选后的子集）。
    * @param progress - 进度宿主（可缺省）。
+   * @param stemSuffix - 文件名追加段（单轮导出为「-回合N / -turnN」，随界面语言）。
    */
   private async execute(
     kind: ExportKind,
     messages: readonly ExtractedMessage[],
     progress?: ProgressTarget,
+    stemSuffix?: string,
   ): Promise<void> {
     const title = readTitle() ?? 'Conversation'
-    const stem = safeFileStem(title)
+    const stem = safeFileStem(stemSuffix === undefined ? title : `${title}${stemSuffix}`)
     const abort = new AbortController()
     this.running = { kind, abort }
     const onProgress = (done: number, total: number): void => {
@@ -377,12 +411,8 @@ class ExportController {
 
   // -------------------------------------------------------- selection panel
 
-  /** 关闭选择/批量面板（幂等）：中止批量面板的在途请求后移除 DOM。 */
+  /** 关闭选择面板（幂等）：移除遮罩 DOM。 */
   private closePanel(): void {
-    this.batchListAbort?.abort()
-    this.batchListAbort = null
-    this.batchRun?.abort()
-    this.batchRun = null
     this.panel?.remove()
     this.panel = null
   }
@@ -393,8 +423,6 @@ class ExportController {
    * 面板随导出结束（含取消）自动关闭。
    */
   private openSelection(): void {
-    // 批量打包进行中不开回合面板（其完成回调会关闭当前面板）。
-    if (this.batchRun !== null) return
     const messages = extractMessages()
     if (messages.length === 0) return
     this.close()
@@ -572,272 +600,6 @@ class ExportController {
     backdrop.appendChild(panel)
     document.body.appendChild(backdrop)
     this.panel = backdrop
-  }
-
-  // ----------------------------------------------------------- batch panel
-
-  /**
-   * 打开批量导出面板（能力吸收自 dsh-companion）：拉取历史会话列表，
-   * 按标题/ID 实时筛选、逐个勾选、全选/全不选（作用于当前筛选结果并与
-   * 已有选择取并集）、已选计数；确认后将所选会话各生成一份 Markdown
-   * 打包为 ZIP 下载（单次最多 100 个会话，自动去重，读取失败自动跳过）。
-   * 打包进行中确认按钮显示「正在打包…」，再次点击或「取消」中止。
-   */
-  private openBatch(): void {
-    // 单会话导出进行中不开面板（其完成回调会关闭本面板）。
-    if (this.running !== null) return
-    this.close()
-    this.closePanel()
-
-    const checked = new Set<string>()
-    let sessions: readonly BatchSession[] = []
-    let keyword = ''
-    let loading = true
-    let loadError = false
-
-    const backdrop = document.createElement('div')
-    backdrop.setAttribute('data-dsh-conv-export-panel-backdrop', '')
-    const panel = document.createElement('div')
-    panel.setAttribute('data-dsh-conv-export-panel', '')
-    panel.setAttribute('role', 'dialog')
-    panel.setAttribute('aria-modal', 'true')
-    panel.setAttribute('aria-label', t('batch.title'))
-
-    // 头部：图标芯片 + 标题/副题 + 关闭按钮。
-    const title = document.createElement('div')
-    title.setAttribute('data-dsh-conv-export-panel-title', '')
-    const titleIco = document.createElement('span')
-    titleIco.setAttribute('data-cx-ico', '')
-    titleIco.innerHTML = ICONS.batch
-    const head = document.createElement('span')
-    head.setAttribute('data-cx-head', '')
-    const titleText = document.createElement('span')
-    titleText.setAttribute('data-cx-title', '')
-    titleText.textContent = t('batch.title')
-    const caption = document.createElement('span')
-    caption.setAttribute('data-cx-caption', '')
-    caption.textContent = t('batch.caption')
-    head.append(titleText, caption)
-    const closeBtn = document.createElement('button')
-    closeBtn.type = 'button'
-    closeBtn.setAttribute('data-cx-close', '')
-    closeBtn.setAttribute('aria-label', t('panel.close'))
-    closeBtn.innerHTML = ICONS.close
-    title.append(titleIco, head, closeBtn)
-    panel.appendChild(title)
-
-    // 工具行：全选/全不选分段控件 + 已选计数。
-    const toolbar = document.createElement('div')
-    toolbar.setAttribute('data-dsh-conv-export-panel-toolbar', '')
-    const seg = document.createElement('div')
-    seg.setAttribute('data-cx-seg', '')
-    const allBtn = document.createElement('button')
-    allBtn.type = 'button'
-    allBtn.textContent = t('panel.selectAll')
-    const noneBtn = document.createElement('button')
-    noneBtn.type = 'button'
-    noneBtn.textContent = t('panel.selectNone')
-    seg.append(allBtn, noneBtn)
-    const count = document.createElement('span')
-    count.setAttribute('data-dsh-conv-export-panel-count', '')
-    toolbar.append(seg, count)
-    panel.appendChild(toolbar)
-
-    // 筛选框：按标题/ID 实时过滤（纯客户端，不分发服务端）。
-    const search = document.createElement('input')
-    search.type = 'search'
-    search.setAttribute('data-dsh-conv-export-batch-search', '')
-    search.placeholder = t('batch.search')
-    search.addEventListener('input', () => {
-      keyword = search.value
-      renderList()
-    })
-    panel.appendChild(search)
-
-    // 会话列表：label 包裹 checkbox，点整行即切换。
-    const list = document.createElement('div')
-    list.setAttribute('data-dsh-conv-export-panel-list', '')
-    panel.appendChild(list)
-
-    // 底部按钮：取消 + 导出（标签写入 [data-cx-label]，打包态由 CSS 呈现）。
-    const footer = document.createElement('div')
-    footer.setAttribute('data-dsh-conv-export-panel-footer', '')
-    const cancelBtn = document.createElement('button')
-    cancelBtn.type = 'button'
-    cancelBtn.setAttribute('data-dsh-conv-export-panel-secondary', '')
-    cancelBtn.textContent = t('panel.cancel')
-    const confirmBtn = document.createElement('button')
-    confirmBtn.type = 'button'
-    confirmBtn.setAttribute('data-dsh-conv-export-panel-primary', '')
-    const confirmLabel = document.createElement('span')
-    confirmLabel.setAttribute('data-cx-label', '')
-    confirmBtn.appendChild(confirmLabel)
-    footer.append(cancelBtn, confirmBtn)
-    panel.appendChild(footer)
-
-    /** 当前筛选结果（标题或 ID 子串匹配，大小写不敏感）。 */
-    const filtered = (): readonly BatchSession[] => {
-      const kw = keyword.trim().toLowerCase()
-      if (!kw) return sessions
-      return sessions.filter(
-        (s) => (s.title ?? '').toLowerCase().includes(kw) || s.id.toLowerCase().includes(kw),
-      )
-    }
-
-    /** 列表状态渲染：加载中 / 加载失败（重试）/ 空 / 无匹配 / 会话行。 */
-    const renderList = (): void => {
-      list.textContent = ''
-      if (loading) {
-        list.appendChild(note(t('batch.loading'), 'loading'))
-        return
-      }
-      if (loadError) {
-        const retry = document.createElement('button')
-        retry.type = 'button'
-        retry.textContent = t('batch.retry')
-        retry.addEventListener('click', () => { load() })
-        const row = note(t('batch.loadFail'), 'error')
-        row.appendChild(retry)
-        list.appendChild(row)
-        return
-      }
-      if (sessions.length === 0) {
-        list.appendChild(note(t('batch.empty'), 'empty'))
-        return
-      }
-      const rows = filtered()
-      if (rows.length === 0) {
-        list.appendChild(note(t('batch.noMatch'), 'empty'))
-        return
-      }
-      for (const session of rows) {
-        const row = document.createElement('label')
-        row.setAttribute('data-dsh-conv-export-panel-item', '')
-        const box = document.createElement('input')
-        box.type = 'checkbox'
-        box.checked = checked.has(session.id)
-        box.addEventListener('change', () => {
-          if (box.checked) checked.add(session.id)
-          else checked.delete(session.id)
-          sync()
-        })
-        const name = document.createElement('span')
-        name.setAttribute('data-dsh-conv-export-batch-name', '')
-        const display = session.title ?? session.id
-        name.textContent = display
-        // 悬停提示展示完整标题（列表内单行截断的补充）。
-        name.title = display
-        const time = document.createElement('span')
-        time.setAttribute('data-dsh-conv-export-batch-time', '')
-        time.textContent = new Date(session.createdAt).toLocaleString(undefined, { hour12: false })
-        row.append(box, name, time)
-        list.appendChild(row)
-      }
-    }
-
-    /** 同步计数与导出按钮（打包进行中不打扰进度文案）。 */
-    const sync = (): void => {
-      count.textContent = `${t('panel.selected')} ${checked.size}/${sessions.length}`
-      if (this.batchRun === null) {
-        confirmBtn.disabled = checked.size === 0
-        setButtonLabel(confirmBtn, checked.size === 0
-          ? t('batch.minSelect')
-          : `${t('panel.export')} (${checked.size})`)
-      }
-    }
-    sync()
-
-    /** 拉取会话列表（打开时与失败重试共用；面板关闭时中止在途请求）。 */
-    const load = (): void => {
-      loading = true
-      loadError = false
-      renderList()
-      const abort = new AbortController()
-      this.batchListAbort = abort
-      fetchBatchSessions(abort.signal)
-        .then((rows) => {
-          if (abort.signal.aborted || this.panel !== backdrop) return
-          sessions = rows
-          loading = false
-          renderList()
-          sync()
-        })
-        .catch((error: unknown) => {
-          if (abort.signal.aborted || this.panel !== backdrop) return
-          if (error instanceof DOMException && error.name === 'AbortError') return
-          loading = false
-          loadError = true
-          renderList()
-        })
-        .finally(() => {
-          if (this.batchListAbort === abort) this.batchListAbort = null
-        })
-    }
-
-    /** 执行批量导出：POST /conv-export/batch → ZIP 下载；中止信号贯穿请求。 */
-    const runBatch = (): void => {
-      const ids = sessions.filter((s) => checked.has(s.id)).map((s) => s.id)
-      if (ids.length === 0) return
-      const abort = new AbortController()
-      this.batchRun = abort
-      // 保持可点击：进行中再次点击确认即中止（与回合面板同一交互纪律）。
-      confirmBtn.disabled = false
-      confirmBtn.setAttribute('data-cx-state', 'running')
-      setButtonLabel(confirmBtn, t('batch.packing'))
-      runBatchExport(ids, abort.signal)
-        .then(() => {
-          this.toast(t('batch.done'))
-          this.closePanel()
-        })
-        .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === 'AbortError') {
-            this.toast(t('batch.cancelled'))
-          } else {
-            this.toast(error instanceof Error && error.message.length > 0 ? error.message : t('batch.fail'))
-          }
-        })
-        .finally(() => {
-          if (this.batchRun === abort) this.batchRun = null
-          confirmBtn.removeAttribute('data-cx-state')
-          sync()
-        })
-    }
-
-    allBtn.addEventListener('click', () => {
-      // 全选作用于当前筛选结果并与已有选择取并集（筛选时即「选中全部匹配项」，
-      // 不匹配的已选会话保持选中不被清除）。
-      for (const session of filtered()) checked.add(session.id)
-      renderList()
-      sync()
-    })
-    noneBtn.addEventListener('click', () => {
-      checked.clear()
-      renderList()
-      sync()
-    })
-    /** 请求关闭：打包进行中先中止，空闲则直接关面板（取消/关闭共用）。 */
-    const requestClose = (): void => {
-      if (this.batchRun !== null) {
-        this.batchRun.abort()
-        return
-      }
-      this.closePanel()
-    }
-    cancelBtn.addEventListener('click', requestClose)
-    closeBtn.addEventListener('click', requestClose)
-    confirmBtn.addEventListener('click', () => {
-      // 打包进行中：再次点击确认 = 中止（进度文案所在按钮即取消入口）。
-      if (this.batchRun !== null) {
-        this.batchRun.abort()
-        return
-      }
-      runBatch()
-    })
-
-    backdrop.appendChild(panel)
-    document.body.appendChild(backdrop)
-    this.panel = backdrop
-    load()
   }
 
   /**

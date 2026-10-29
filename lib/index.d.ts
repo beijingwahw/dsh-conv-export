@@ -1,27 +1,29 @@
 /**
- * dsh-conv-export 宿主入口：批量导出的只读服务层。
+ * dsh-conv-export 宿主入口（本 fork：批量导出已整体移除）。
  *
- * 历史上这里是空注册壳（全部行为位于浏览器 bundle）；批量导出需要跨
- * 会话读取历史对话——浏览器侧无法访问当前会话之外的转录——故宿主半
- * 新增一个瘦服务层：经 ctx.webServer 挂载 /conv-export 前缀路由，经
- * ctx.sessionQuery 读取会话。无存储域、无出站网络请求、无状态；
- * 单会话导出（Markdown / PDF / 长图）与回合选择仍完全在浏览器
- * bundle（exports["./client"]）内，不经此路径。
+ * 上游版本在这里经 ctx.webServer 挂载 /conv-export 前缀路由、经
+ * ctx.sessionQuery 读取历史会话，用于跨会话批量打包。本 fork 的取舍：
  *
- * 端点（全部 JSON，字节内容 base64）：
- * - GET  /conv-export/sessions → { sessions: SessionHeader[] }
- * - POST /conv-export/batch    { sessionIds: string[] }
- *   → { kind: 'file', fileName, mimeType: 'application/zip', contentBase64 }
+ * 1. 无鉴权面：DSH webServer 文档明确「服务端不做 TLS / 鉴权 / origin
+ *    策略，路由所有者自己负责」，而该端点未加任何一层——实测不带 token
+ *    即可 GET 会话列表、POST 拉走任意会话全文 ZIP（对照 /api/* 一律 401）。
+ * 2. 性能：列表接口每次全量读日志折标题，实测 18 秒以上且无缓存。
+ * 3. 泄露：批量 Markdown 由日志派生，会把 <system-reminder> 与
+ *    AGENTS.md 全文一并导出。
+ *
+ * 因此宿主半整体删除：无 webServer / sessionQuery 依赖、无出站请求、
+ * 无状态。插件只剩浏览器半——单会话与单轮导出，全部在点击时刻从渲染
+ * DOM 提取（所见即所得，天然不含思考块、工具卡片与注入的指令层）。
+ *
+ * 注意：cordis.patch.yml 里的 insert 行必须保留——boot graph 靠它扫描
+ * 包的 `dsh.client` 声明，才会在 /plugins/<id>/client.js 提供浏览器
+ * bundle；它与宿主是否注册路由无关。
  */
 import type { Context } from '@deepseek-ai/cordis';
 /** Stable Cordis plugin name (matches the manifest id). */
 export declare const name = "@dsh-external/dsh-conv-export";
-/** 依赖服务：同源路由挂载点与会话查询（批量导出专用，只读）。 */
-export declare const inject: string[];
 /**
- * 宿主入口：注册 /conv-export 前缀路由与两个批量导出端点。
- * 全部注册经 ctx.effect，随插件卸载自动回卷；错误一律收敛为
- * HttpError，不泄漏内部细节。
- * @param ctx - host root context（经 inject 提供 webServer / sessionQuery）。
+ * 宿主入口：空壳。全部导出行为位于浏览器 bundle（exports["./client"]）。
+ * @param _ctx - host root context（不使用任何服务）。
  */
-export declare function apply(ctx: Context): void;
+export declare function apply(_ctx: Context): void;

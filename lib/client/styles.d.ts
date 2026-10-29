@@ -1,8 +1,8 @@
 /**
  * Global stylesheet adoption: the export dropdown chrome, the header action
- * button, the turn-selection panel, the batch session panel, and the failure
- * toast. Injected once into document.head with a stable id so repeated
- * plugin loads never double-inject.
+ * button, the per-turn strip button, the turn-selection panel, and the
+ * failure toast. Injected once into document.head with a stable id so
+ * repeated plugin loads never double-inject.
  *
  * 视觉系统「墨与玻璃（Ink & Glass）」：
  * - 结构分层：发丝线分隔各区块，面板 20px 大圆角 + 三层冷调投影 + 内侧

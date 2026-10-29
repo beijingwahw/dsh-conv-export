@@ -1,8 +1,8 @@
 {
   "name": "@dsh-external/dsh-conv-export",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "type": "module",
-  "description": "dsh-conv-export（对话导出）— export the current DeepSeek Harness conversation as Markdown, single-file HTML, PDF, or a long PNG image, or copy it as Markdown; batch-export historical sessions as a Markdown ZIP.",
+  "description": "dsh-conv-export（对话导出）— export the current conversation, or a single assistant turn, as Markdown, single-file HTML, PDF, or a long PNG image, or copy it as Markdown. Fork: batch export removed, per-turn export added.",
   "license": "MIT",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

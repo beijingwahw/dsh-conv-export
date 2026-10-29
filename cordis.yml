@@ -1,10 +1,9 @@
 # 开发期热更新进程：npm run dev（独立 cordis + HMR，与 dsh 安装互不影响）。
 # dsh 加载本包时只读 cordis.patch.yml（package.json 的 dsh.bundle.patch），不读此文件。
-# 保存 src/（宿主服务层 + invariant）或本文件本身 → 旧实例卸载 → 新代码挂载，无需重启。
+# 保存 src/（宿主入口 + invariant）或本文件本身 → 旧实例卸载 → 新代码挂载，无需重启。
 #
-# 入口为 dev/entry.ts 聚合入口：宿主半 src/index.ts 现承载批量导出服务层
-# （inject: webServer / sessionQuery），dev 进程无 dsh 宿主——host-stubs
-# 提供两个服务的最小桩（无会话数据，端点被调用时才触及）。
+# 入口为 dev/entry.ts 聚合入口：宿主半 src/index.ts 在本 fork 已是空壳
+# （批量导出移除，无 webServer / sessionQuery 依赖），不再需要服务桩。
 # src/client/** 是浏览器 bundle（react/DOM），不进 node HMR 进程——
 # 客户端代码由 dsh web 宿主的浏览器 ModuleLoader 加载：另开 `pnpm build:watch`，
 # 保存任意 client 模块即自动重建 lib/client.js，浏览器重新加载即可，无需重启。
@@ -17,7 +16,5 @@
   config:
     root: ['.']      # 监视仓库目录（默认忽略 node_modules / .* / cache / data）
     usePolling: true # 沙箱/容器文件系统常缺 inotify 事件，按上游 app-boot 用法走轮询（Config extends ChokidarOptions）
-- id: host-stubs
-  name: './dev/host-stubs.ts'
 - id: conv-export
   name: './dev/entry.ts'
