@@ -1,1 +1,1 @@
-export * from './client/index.js'\n
+export * from './client/index.js'

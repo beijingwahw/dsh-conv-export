@@ -1,25 +1,21 @@
 /**
  * dsh-conv-export browser half: export the current conversation as
- * Markdown, PDF, or a long PNG image — from the session header, or from a
- * single assistant turn's own strip button.
+ * Markdown, PDF, or a long PNG image.
  *
- * Two contributions:
- * 1. an export icon button in the session header's action row, registered
- *    into `conversation.session.header.actions` (the additive seat for
- *    per-session controls beside the title);
- * 2. a per-turn export button in `conversation.chat.assistant-actions` —
- *    the IconActions strip under every finalized assistant reply — which
- *    opens the same dropdown scoped to that turn only.
+ * One contribution: an export icon button in the session header's action
+ * row, registered into the harness's `conversation.session.header.actions`
+ * slot (the additive seat for per-session controls beside the title). The
+ * button opens a dropdown with the five sinks; extraction runs at click
+ * time over the rendered transcript, so exports always match what the
+ * reader sees.
  *
- * Zero core changes: everything rides cordis effects and declared slots.
+ * Zero core changes: everything rides cordis effects and the declared slot.
  */
 import { type ReactElement } from 'react';
 /** Stable Cordis plugin name (matches the manifest id). */
 export declare const name = "@dsh-external/dsh-conv-export";
-/** Required services: the slot registry (both seats ride it). */
+/** Required services: the slot registry (the header action seat rides it). */
 export declare const inject: string[];
-/** The two slot keys this plugin contributes to. */
-type SlotKey = 'conversation.session.header.actions' | 'conversation.chat.assistant-actions';
 /**
  * Minimal structural face of the slot service this plugin uses. Declared
  * locally (not imported) so the client bundle stays pure: cross-package
@@ -27,13 +23,13 @@ type SlotKey = 'conversation.session.header.actions' | 'conversation.chat.assist
  * service shape every stock web app provides.
  */
 interface SlotsFace {
-    inject(key: SlotKey, callback: () => () => void): () => void;
+    inject(key: 'conversation.session.header.actions', callback: () => () => void): () => void;
     register(options: {
-        name: SlotKey;
+        name: 'conversation.session.header.actions';
         id: string;
         order: number;
         inject: () => Record<string, never>;
-    }, component: (props: SlotProps) => ReactElement | null): () => void;
+    }, component: (props: HeaderActionProps) => ReactElement | null): () => void;
 }
 /** Minimal client context face (the slot service is the only dependency). */
 interface ClientContextFace {
@@ -41,16 +37,16 @@ interface ClientContextFace {
     effect(effect: () => (() => void) | void, label?: string): () => Promise<void>;
 }
 /**
- * Slot props: the header kit carries `sessionId`; the assistant-actions strip
- * carries `messageId`, which pins the exact reply during extraction.
+ * The header action button props. The slot renderer spreads the standard
+ * session kit (sessionId, useSession, ...) plus the owner share; the button
+ * needs none of it, so the type stays open.
  */
-interface SlotProps {
+interface HeaderActionProps {
     readonly sessionId?: string;
-    readonly messageId?: string;
 }
 /**
  * Browser plugin body: install the controller's document effects and
- * register both export buttons into their slots.
+ * register the header action button into the session header slot.
  * @param ctx - client root context.
  */
 export declare function apply(ctx: ClientContextFace): void;
